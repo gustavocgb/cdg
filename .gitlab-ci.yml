@@ -1,0 +1,224 @@
+# Na linha abaixo selecionamos qual imagem docker deve ser utilizada para o CICD.
+# No TerraLab trabalhamos utilizando React e o Node. Quase todos os nossos CICD’s 
+# são feitos a partir da imagem node:latest. É possível especificar uma versão do 
+# Node simplesmente trocando o latest pela versão por exemplo, node:10.
+
+image: node:16.14.0
+ 
+# Os stages representam os passos na execução do pipeline do CICD. Temos os seguintes passos abaixo possíveis no nosso projeto,
+# feitos com base no Git flow. É importante notar que nem todos os passos serão sempre executados. Por exemplo, é possivel 
+# executar somente o build e test, para um merge request, ou o stagingDeploy para realizar o deploy no ambiente de testes. 
+
+stages:
+  - build
+  - test
+  - BeforeStaging
+  - deployStaging
+  - BeforeProduction
+  - deployProduction
+
+# Como nosso projeto é feito em node, sempre que precisamos executar algo pela primeira vez é necessário realizar o build.
+# Artefatos gerados por um estágio do pipeline não são carregados para o próximo, a menos que isso seja especificado.
+# No nosso caso, o build vai criar a pasta node_modules que deve ser guardada em cache para ser utilizada nos outros estágios. 
+
+cache:
+ paths:
+  - node_modules/
+
+# É aqui que começa a divisão dos estágios dentro do Git flow. Estamos especificando em quais situações o pipeline
+# vai ser executado a menos que alguma alteração seja feita dentro do próprio estágio. 
+
+.only-default: &only-default
+  only:
+    # - Master
+    # - Staging
+    - Development
+    - merge_requests
+
+
+# Abaixo estamos definindo cada um dos estágios especificados no script anteriormente. 
+
+#Incluímos only-default dessa forma no estágio para especificar que ele deve obedecer a execução 
+# default que tínhamos descrito antes no arquivo. Ou seja, o build vai ser sempre executado não importa 
+# a situação. 
+
+
+build:
+  <<: *only-default
+  stage: build
+  script:
+    - npm install
+    - npm run build
+  artifacts:
+    paths:
+       - node_modules/
+
+# O estágio de testes é executado somente quando ocorrem requisições de merge. 
+# Não queremos que ele fique executando sempre que alguém faz um commit. 
+# Por isso, trocamos o estado default para only: -merge_requests
+unit-tests:
+  only:
+    - merge_requests
+  stage: test
+  script:
+    # - npx jest --passWithNoTests --runInBand -c src/infra/tests/jest/jest-unit-config.js
+    - exit 0
+
+integration-tests:
+  only:
+    - merge_requests
+  stage: test
+  variables:
+    POSTGRES_DB: $TEST_DB_NAME
+    POSTGRES_USER: $TEST_DB_USER
+    POSTGRES_PASSWORD: $TEST_DB_PASS
+    POSTGRES_HOST_AUTH_METHOD: trust
+  services:
+    - postgres:14.1
+  before_script: 
+    # Database
+    - echo DATABASE_URL="postgresql://$TEST_DB_USER:$TEST_DB_PASS@$TEST_HOST:$TEST_DB_PORT/$TEST_DB_NAME?schema=public" >> .env
+
+    # API keys
+    - echo GOOGLE_API_KEY=$TEST_GOOGLE_API_KEY >> .env 
+    - echo HERE_API_KEY=$TEST_HERE_API_KEY >> .env 
+    - echo MAPBOX_API_KEY=$TEST_MAPBOX_API_KEY >> .env 
+    - echo ORS_API_KEY=$TEST_ORS_API_KEY >> .env 
+    - echo TOMTOM_API_KEY=$TEST_TOMTOM_API_KEY >> .env 
+
+    # Criptography API keys
+    - echo GEOAPI_SECRET=$TEST_GEOAPI_SECRET >> .env
+  script:
+    # - npx prisma generate --schema=./src/infra/db/techs/prisma/config/schema.prisma
+    # - npx prisma migrate dev --schema=./src/infra/db/techs/prisma/config/schema.prisma
+    # - NODE_ENV=prod npx jest --passWithNoTests --runInBand -c src/infra/tests/jest/jest-functional-config.js
+    - exit 0
+
+# # De forma semelhante ao teste, queremos que o nosso deploy para Staging seja feito somente 
+# # quando um commit for realizado na Staging
+
+deleteOldImageStaging:
+  image: alpine:latest
+  stage: BeforeStaging
+  only:
+    - Staging
+    - staging_v2
+  before_script:
+    - 'command -v ssh-agent >/dev/null || ( apk add --update openssh )' 
+    - eval $(ssh-agent -s)
+    - echo "$ID_RSA_REGISTRY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan $REGISTRY_IP >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+    - export IMAGE_NAME=crawler
+    - export IMAGE_TAG=staging
+  script:
+    - ssh -o StrictHostKeyChecking=no $REGISTRY_SERVER_USER@$REGISTRY_IP "cd /home/ubuntu/registry/scripts && ./deleteImageTag.sh $IMAGE_NAME $IMAGE_TAG"
+
+pushImageStaging:
+  dependencies:
+    - deleteOldImageStaging
+  image: docker:19.03.12
+  services:
+    - name: docker:19.03.12-dind
+      command: [--insecure-registry, "177.71.133.117:5000"]
+  needs: ["deleteOldImageStaging"]
+  when: on_success
+  only:
+    - Staging
+    - staging_v2
+  stage: deployStaging
+  before_script:
+    - export PRIVATE_KEY=$TEST_PRIVATE_KEY
+    - export DEPLOY_SERVERS=$TEST_DEPLOY_SERVERS
+    - export IMAGE_TAG=staging
+  script:
+    - echo $REGISTRY_PASSWORD | docker login "$REGISTRY_IP:$REGISTRY_PORT" -u $REGISTRY_USERNAME --password-stdin
+    - docker build -t "$REGISTRY_IP:$REGISTRY_PORT/crawler:$IMAGE_TAG" .
+    - docker system prune -f
+    - docker images
+    - docker push "$REGISTRY_IP:$REGISTRY_PORT/crawler:$IMAGE_TAG"
+
+deployStaging:
+  dependencies:
+    - pushImageStaging
+  image: docker:19.03.12
+  needs: ["pushImageStaging"]
+  when: on_success
+  only:
+    - Staging
+    - staging_v2
+  stage: deployStaging
+  before_script:
+    - export PRIVATE_KEY=$TEST_PRIVATE_KEY
+    - export DEPLOY_SERVERS=$TEST_DEPLOY_SERVERS
+    - export IMAGE_TAG=staging
+  script:
+    - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+    - chmod a+x disableHostKeyChecking.sh
+    - ls
+    - sh ./deployStaging.sh
+ 
+# Como fizemos para o Staging, queremos que o deploy para produção seja executado somente caso
+# exista um commit na Master 
+
+deleteOldImageProduction:
+  image: alpine:latest
+  stage: BeforeProduction
+  only:
+    - Master
+  before_script:
+    - 'command -v ssh-agent >/dev/null || ( apk add --update openssh )' 
+    - eval $(ssh-agent -s)
+    - echo "$ID_RSA_REGISTRY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan $REGISTRY_IP >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+    - export IMAGE_NAME=crawler
+    - export IMAGE_TAG=stable
+  script:
+    - ssh -o StrictHostKeyChecking=no $REGISTRY_SERVER_USER@$REGISTRY_IP "cd /home/ubuntu/registry/scripts && ./deleteImageTag.sh $IMAGE_NAME $IMAGE_TAG"
+
+
+pushImageProduction:
+  dependencies:
+    - deleteOldImageProduction
+  image: docker:19.03.12
+  services:
+    - name: docker:19.03.12-dind
+      command: [--insecure-registry, "177.71.133.117:5000"]
+  needs: ["deleteOldImageProduction"]
+  when: on_success
+  only:
+    - Master
+  stage: deployProduction
+  before_script:
+    - export PRIVATE_KEY=$PROD_PRIVATE_KEY
+    - export DEPLOY_SERVERS=$PROD_DEPLOY_SERVERS
+    - export IMAGE_TAG=stable
+  script:
+    - echo $REGISTRY_PASSWORD | docker login "$REGISTRY_IP:$REGISTRY_PORT" -u $REGISTRY_USERNAME --password-stdin
+    - docker build -t "$REGISTRY_IP:$REGISTRY_PORT/crawler:$IMAGE_TAG" .
+    - docker system prune -f
+    - docker images
+    - docker push "$REGISTRY_IP:$REGISTRY_PORT/crawler:$IMAGE_TAG"
+
+deployProduction:
+  dependencies: 
+    - pushImageProduction
+  image: docker:19.03.12
+  needs: ["pushImageProduction"]
+  when: on_success
+  only:
+    - Master
+  stage: deployProduction
+  before_script:
+    - export PRIVATE_KEY=$PROD_PRIVATE_KEY
+    - export DEPLOY_SERVERS=$PROD_DEPLOY_SERVERS
+    - export IMAGE_TAG=stable
+  script:
+    - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+    - chmod a+x disableHostKeyChecking.sh
+    - sh ./deploy.sh

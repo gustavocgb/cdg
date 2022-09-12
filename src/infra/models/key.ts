@@ -1,0 +1,26 @@
+export interface KeyModel {
+    key_id?: number | undefined
+    value?: string | undefined
+    date?: Date | undefined
+    request?:  number | undefined
+    url?: string | undefined
+    initial_date?: Date | undefined
+    isGeocoding?: boolean | undefined
+    isRequests?: boolean | undefined
+    isAddress?: boolean | undefined
+    isDate?: boolean | undefined
+    isError?: boolean | undefined
+    isInitialZeroHours?: boolean | undefined
+    isDay?: boolean | undefined
+    isActivated?: boolean | undefined
+    isExcluded?: boolean | undefined
+    maxRequestPerSecond?: number | undefined
+    maxRequestPerDay?: number | undefined
+    maxRequestPerMonth?: number | undefined
+    geoapi_id?: string | undefined
+    current_address?: number | undefined
+    reference_address?: number | undefined
+    name?: string | undefined
+    email?: string | undefined
+    password?: string | undefined
+}

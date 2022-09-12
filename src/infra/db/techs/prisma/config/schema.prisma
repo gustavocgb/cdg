@@ -1,0 +1,108 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Geoapi {
+  maxRequestPerDay    Int?
+  maxRequestPerSecond Int?
+  geoapi_id           String     @id(map: "Geoapi_id_PKEY") @unique(map: "provider_name")
+  maxRequestPerMonth  Int?
+  Key                 Key[]
+  Response            Response[]
+  Search              Search[]
+}
+
+model Request {
+  request_id                         Int        @id(map: "Request_id_PKEY") @default(autoincrement())
+  full_address                       String?
+  public_place                       String?
+  district                           String?
+  city                               String?
+  state                              String?
+  zip_code                           String?
+  unit                               String?
+  number                             String?
+  Key_Key_current_addressToRequest   Key[]      @relation("Key_current_addressToRequest")
+  Key_Key_reference_addressToRequest Key[]      @relation("Key_reference_addressToRequest")
+  Response                           Response[]
+  Search                             Search[]
+}
+
+model Response {
+  geolocation_id Int     @id(map: "Response_id_PKEY") @default(autoincrement())
+  full_address   String?
+  public_place   String?
+  district       String?
+  zip_code       String?
+  city           String?
+  state          String?
+  country        String?
+  accuracy       Float?
+  latitude       Float?
+  longitude      Float?
+  place_type     String?
+  longWestBBox   Float?
+  latNorthBBox   Float?
+  longEastBBox   Float?
+  latSouthBBox   Float?
+  request_id     Int
+  number         String?
+  geoapi_id      String
+  key_id         Int?
+  search_id      Int?
+  Geoapi         Geoapi  @relation(fields: [geoapi_id], references: [geoapi_id], onDelete: NoAction, onUpdate: NoAction, map: "Geoapi_id_FKEY")
+  Key            Key?    @relation(fields: [key_id], references: [key_id], onDelete: NoAction, onUpdate: NoAction, map: "Key_id_FKEY")
+  Request        Request @relation(fields: [request_id], references: [request_id], onDelete: NoAction, onUpdate: NoAction, map: "Request_id_FKEY")
+  Search         Search? @relation(fields: [search_id], references: [search_id], onDelete: NoAction, onUpdate: NoAction, map: "Search_id_FKEY")
+}
+
+model Search {
+  date               DateTime?  @db.Timestamptz(6)
+  error              String?
+  generated_response Boolean?
+  request_id         Int
+  geoapi_id          String
+  search_id          Int        @id(map: "Search_id_PKEY") @default(autoincrement())
+  key_id             Int?
+  Geoapi             Geoapi     @relation(fields: [geoapi_id], references: [geoapi_id], onDelete: NoAction, onUpdate: NoAction, map: "Geoapi_id_FKEY")
+  Key                Key?       @relation(fields: [key_id], references: [key_id], onDelete: NoAction, onUpdate: NoAction, map: "Key_id_FKEY")
+  Request            Request    @relation(fields: [request_id], references: [request_id], onDelete: NoAction, onUpdate: NoAction, map: "Request_id_FKEY")
+  Response           Response[]
+}
+
+model Key {
+  date                                   DateTime?  @db.Timestamptz(6)
+  request                                Int?
+  initial_date                           DateTime?  @db.Timestamptz(6)
+  value                                  String?
+  name                                   String?
+  url                                    String?
+  isInitialZeroHours                     Boolean?
+  isDay                                  Boolean?
+  isGeocoding                            Boolean?
+  isRequests                             Boolean?
+  isAddress                              Boolean?
+  isError                                Boolean?
+  isDate                                 Boolean?
+  isActivated                            Boolean?
+  isExcluded                             Boolean?
+  email                                  String?
+  password                               String?
+  maxRequestPerMonth                     Int?
+  maxRequestPerDay                       Int?
+  maxRequestPerSecond                    Int?
+  key_id                                 Int        @id(map: "Key_id_PKEY") @default(autoincrement())
+  geoapi_id                              String
+  reference_address                      Int?
+  current_address                        Int
+  Request_Key_current_addressToRequest   Request    @relation("Key_current_addressToRequest", fields: [current_address], references: [request_id], onDelete: NoAction, onUpdate: NoAction, map: "Current_address_FKEY")
+  Geoapi                                 Geoapi     @relation(fields: [geoapi_id], references: [geoapi_id], onDelete: NoAction, onUpdate: NoAction, map: "Geoapi_id_FKEY")
+  Request_Key_reference_addressToRequest Request?   @relation("Key_reference_addressToRequest", fields: [reference_address], references: [request_id], onDelete: NoAction, onUpdate: NoAction, map: "Reference_address_FKEY")
+  Response                               Response[]
+  Search                                 Search[]
+}

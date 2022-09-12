@@ -1,0 +1,40 @@
+section {
+  height: 100vh;
+}
+
+header h1 {
+  color: #d9d9d9;
+}
+
+.color-header{
+  background-color: #1c7430;
+}
+
+a {
+  text-decoration: none !important;
+}
+
+.jumbotron {
+  background-color:rgb(238, 222, 78, 0.2) !important;
+}
+
+/* spinner */
+.spinner {
+  border: 8px solid rgba(0, 0, 0, 0.1);
+  border-left-color: #1c7430;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  animation: spin 1s linear infinite;
+  position:absolute;
+  left:50%;
+  top:50%;
+  z-index: 9999 !important;
+  display: none;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+builds
+globalConfig.json
+.vscode
+.idea
+.prettierrc
+package-lock.json
+yarn.lock
+api.http
+.env
+.env.test
+public/logs

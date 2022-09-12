@@ -1,0 +1,15 @@
+section {
+  height: 100vh;
+}
+
+header h1 {
+  color: #d9d9d9;
+}
+
+.color-header{
+  background-color: #1c7430;
+}
+
+a {
+  text-decoration: none !important;
+}
