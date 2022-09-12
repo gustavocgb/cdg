@@ -1,5 +1,4 @@
 # Backend SGM GeoCrawler
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx
 
 O Crawler de geocodificação é um sistema capaz de receber endereços de logradouros e geocodificá-los. A geocodificação é feita através de APIs disponíveis na internet, como Google Maps e Open Street Maps, por exemplo. Após a geocodificação ser concluída, os dados geocodificados são armazenados em uma base de dados.
 
